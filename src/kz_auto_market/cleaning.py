@@ -111,6 +111,22 @@ AUTOMATIC_PATTERN = re.compile(
 MANUAL_PATTERN = re.compile(r'MT\b|M/T|MKП|MEX|^\d+\s*M$')
 # Кириллические буквы, которые в выгрузке подменяют латинские
 LOOKALIKES = str.maketrans('АТМЕХ', 'ATMEX')
+MONTHS = {
+    'Январь': 1,
+    'Февраль': 2,
+    'Март': 3,
+    'Апрель': 4,
+    'Май': 5,
+    'Июнь': 6,
+    'Июль': 7,
+    'Август': 8,
+    'Сентябрь': 9,
+    'Октябрь': 10,
+    'Ноябрь': 11,
+    'Декабрь': 12,
+}
+# Партия от 50 автомобилей в одной строке — оптовая поставка (таксопарк, автопарк)
+WHOLESALE_MIN_QUANTITY = 50
 
 
 def read_raw(path: Path | str = RAW_PATH) -> pd.DataFrame:
@@ -213,6 +229,29 @@ def fill_from_model(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
     return df
 
 
+def convert_numbers(df: pd.DataFrame) -> pd.DataFrame:
+    """Приводит количество и суммы к числам, помечает возвраты и опт.
+
+    Строки без количества и с нулевой суммой продажи — не продажи, они
+    удаляются. Возврат (количество −1) остаётся: он уменьшает продажи.
+    """
+    df = df[df['quantity'].notna()].copy()
+    df['quantity'] = df['quantity'].astype(int)
+    df['price_usd'] = df['price_usd'].astype(float).round(2)
+    df['sale_usd'] = df['sale_usd'].astype(float).round(2)
+    df['is_return'] = df['quantity'] < 0
+    df['is_wholesale'] = df['quantity'] >= WHOLESALE_MIN_QUANTITY
+    return df.reset_index(drop=True)
+
+
+def add_sale_date(df: pd.DataFrame) -> pd.DataFrame:
+    """Дата продажи — последний день месяца продажи; год и месяц удаляются."""
+    month = df['month'].str.strip().map(MONTHS)
+    first_day = pd.to_datetime({'year': df['year'], 'month': month, 'day': 1})
+    sale_date = first_day + pd.offsets.MonthEnd(0)
+    return df.assign(sale_date=sale_date).drop(columns=['year', 'month'])
+
+
 def clean(raw: pd.DataFrame) -> pd.DataFrame:
     """Полный цикл очистки в порядке плана работы."""
     df = drop_unused_columns(raw)
@@ -224,4 +263,6 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     df = unify_drives(df)
     df = simplify_transmissions(df)
     df = fill_from_model(df, ['fuel', 'transmission', 'drive'])
+    df = convert_numbers(df)
+    df = add_sale_date(df)
     return df
