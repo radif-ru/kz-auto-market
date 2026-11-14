@@ -7,7 +7,10 @@ authors = [
     { name = "Radif Ilaltdinov", email = "i@radif.ru" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.11.2",
+    "pandas>=3.1.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.11.13,<0.12.0"]
