@@ -1,7 +1,8 @@
 """Очистка выгрузки продаж автомобилей: от сырого CSV к датасету для анализа и BI.
 
 Каждый шаг — отдельная функция без побочных эффектов: принимает таблицу и
-возвращает новую. ``clean()`` выполняет шаги в порядке плана работы.
+возвращает новую. ``clean()`` выполняет шаги в порядке плана работы,
+``main()`` — точка входа командной строки.
 
 >>> to_alpha3('Республика Казахстан'), to_alpha3('UK'), to_alpha3('Марс')
 ('KAZ', 'GBR', None)
@@ -17,6 +18,7 @@
 
 from __future__ import annotations
 
+import argparse
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -24,6 +26,8 @@ from pathlib import Path
 import pandas as pd
 
 RAW_PATH = Path('data/raw/autokz2019.csv')
+CLEAN_PATH = Path('data/processed/autokz2019_clean.csv')
+FOCUS_COMPANY = 'Mercur Auto'
 
 # Столбцы из плана работы и их названия в выгрузке
 DROP_COLUMNS = {
@@ -358,3 +362,32 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     df = fix_engine_volumes(df)
     df = normalize_case(df)
     return set_final_types(df)
+
+
+def read_clean(path: Path | str = CLEAN_PATH) -> pd.DataFrame:
+    """Читает очищенный датасет и восстанавливает типы столбцов."""
+    df = pd.read_csv(path, parse_dates=['sale_date'])
+    df['release_year'] = df['release_year'].astype('Int64')
+    for column in CATEGORY_COLUMNS:
+        df[column] = df[column].astype('category')
+    return df
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Командная строка: очистить выгрузку и сохранить CSV для анализа и BI."""
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('source', nargs='?', type=Path, default=RAW_PATH)
+    parser.add_argument('target', nargs='?', type=Path, default=CLEAN_PATH)
+    args = parser.parse_args(argv)
+
+    raw = read_raw(args.source)
+    data = clean(raw)
+    args.target.parent.mkdir(parents=True, exist_ok=True)
+    data.to_csv(args.target, index=False, date_format='%Y-%m-%d')
+    print(f'Строк в выгрузке: {len(raw)}, после очистки: {len(data)}')
+    print(f'Столбцов: {raw.shape[1]} → {data.shape[1]}')
+    print(f'Сохранено: {args.target}')
+
+
+if __name__ == '__main__':
+    main()
