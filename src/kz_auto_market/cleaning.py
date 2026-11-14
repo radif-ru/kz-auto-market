@@ -55,6 +55,28 @@ COLUMN_NAMES = {
     'Сегментация 2013': 'segment_2013',
     'Класс 2013': 'class_2013',
 }
+COLUMN_ORDER = [
+    'sale_date',
+    'company',
+    'brand',
+    'model',
+    'release_year',
+    'country',
+    'fuel',
+    'engine_volume',
+    'transmission',
+    'drive',
+    'segment_2013',
+    'class_2013',
+    'region',
+    'province',
+    'quantity',
+    'price_usd',
+    'sale_usd',
+    'is_return',
+    'is_wholesale',
+]
+CATEGORY_COLUMNS = ['fuel', 'transmission', 'drive', 'segment_2013', 'class_2013']
 
 COUNTRY_CODES = {
     'Республика Казахстан': 'KAZ',
@@ -300,6 +322,25 @@ def fix_engine_volumes(df: pd.DataFrame) -> pd.DataFrame:
     return df.assign(engine_volume=volume.mask(wrong, typical).round(3))
 
 
+def normalize_case(df: pd.DataFrame) -> pd.DataFrame:
+    """Регион и область: каждое слово с заглавной буквы."""
+    return df.assign(
+        region=df['region'].str.strip().str.title(),
+        province=df['province'].str.strip().str.title(),
+    )
+
+
+def set_final_types(df: pd.DataFrame) -> pd.DataFrame:
+    """Год выпуска — целое, технические признаки — category, порядок столбцов."""
+    release_year = pd.to_numeric(
+        df['release_year'].str.replace(r'\s', '', regex=True), errors='coerce'
+    ).astype('Int64')
+    df = df.assign(release_year=release_year)
+    for column in CATEGORY_COLUMNS:
+        df[column] = df[column].astype('category')
+    return df[COLUMN_ORDER]
+
+
 def clean(raw: pd.DataFrame) -> pd.DataFrame:
     """Полный цикл очистки в порядке плана работы."""
     df = drop_unused_columns(raw)
@@ -315,4 +356,5 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     df = add_sale_date(df)
     df = unify_companies(df)
     df = fix_engine_volumes(df)
-    return df
+    df = normalize_case(df)
+    return set_final_types(df)
