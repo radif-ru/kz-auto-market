@@ -11,6 +11,8 @@
 ['4WD', 'FWD', None]
 >>> [simplify_transmission(value) for value in ('6 АТ', 'AMT', '5МТ')]
 ['Автомат', 'Автомат', 'Механика']
+>>> parse_volume('4,98 L,'), parse_volume('2,4 GDI'), parse_volume('#Н/Д')
+(4.98, 2.4, None)
 """
 
 from __future__ import annotations
@@ -125,8 +127,22 @@ MONTHS = {
     'Ноябрь': 11,
     'Декабрь': 12,
 }
+COMPANY_ALIASES = {
+    'Mercur Autos': 'Mercur Auto',
+    'Меркур Авто': 'Mercur Auto',
+    'Ravon Motors Kazakstan': 'Равон Моторс Казахстан',
+    'Autokapital': 'Автокапитал',
+    'MMC RUS': 'ММС Рус',
+    'Каспиан Моторс': 'Caspian Motors',
+    'Hino Motors': 'Хино Моторс Казахстан',
+    'ТОО "Eurasia Motor Zhaik"': 'Eurasia Motor Zhaik',
+}
 # Партия от 50 автомобилей в одной строке — оптовая поставка (таксопарк, автопарк)
 WHOLESALE_MIN_QUANTITY = 50
+NIVA_VOLUME = 1.7
+# Объём отличается от типичного для модели больше чем в 2.5 раза — ошибка ввода
+VOLUME_RATIO_LIMIT = 2.5
+NUMBER_PATTERN = re.compile(r'\d+(?:\.\d+)?')
 
 
 def read_raw(path: Path | str = RAW_PATH) -> pd.DataFrame:
@@ -186,6 +202,15 @@ def simplify_transmission(transmission: object) -> str | None:
     if MANUAL_PATTERN.search(value):
         return 'Механика'
     return None
+
+
+def parse_volume(volume: object) -> float | None:
+    """Первое число из строки объёма: запятая → точка, буквы отбрасываются."""
+    if pd.isna(volume):
+        return None
+    match = NUMBER_PATTERN.search(str(volume).replace(',', '.'))
+    number = float(match.group()) if match else 0.0
+    return number if number > 0 else None
 
 
 def encode_countries(df: pd.DataFrame) -> pd.DataFrame:
@@ -252,6 +277,29 @@ def add_sale_date(df: pd.DataFrame) -> pd.DataFrame:
     return df.assign(sale_date=sale_date).drop(columns=['year', 'month'])
 
 
+def unify_companies(df: pd.DataFrame) -> pd.DataFrame:
+    """Убирает неявные дубликаты в названиях дилерских компаний."""
+    company = df['company'].str.strip().replace(COMPANY_ALIASES)
+    return df.assign(company=company)
+
+
+def fix_engine_volumes(df: pd.DataFrame) -> pd.DataFrame:
+    """Объём двигателя в литрах с исправлением явных ошибок.
+
+    - у электромобилей объёма нет (у Jaguar I-Pace вместо него — мощность 400 л.с.);
+    - у Chevrolet Niva вместо 1.7 л — растущая последовательность 2.7…26.7;
+    - объём, в 2.5 раза отличающийся от типичного для модели, — ошибка ввода.
+    """
+    volume = df['engine_volume'].map(parse_volume).astype(float)
+    volume = volume.mask(df['fuel'] == 'E')
+    niva = (df['brand'] == 'Chevrolet') & (df['model'] == 'Niva')
+    volume = volume.mask(niva, NIVA_VOLUME)
+    typical = volume.groupby([df['brand'], df['model']]).transform('median')
+    ratio = volume / typical
+    wrong = (ratio > VOLUME_RATIO_LIMIT) | (ratio < 1 / VOLUME_RATIO_LIMIT)
+    return df.assign(engine_volume=volume.mask(wrong, typical).round(3))
+
+
 def clean(raw: pd.DataFrame) -> pd.DataFrame:
     """Полный цикл очистки в порядке плана работы."""
     df = drop_unused_columns(raw)
@@ -265,4 +313,6 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     df = fill_from_model(df, ['fuel', 'transmission', 'drive'])
     df = convert_numbers(df)
     df = add_sale_date(df)
+    df = unify_companies(df)
+    df = fix_engine_volumes(df)
     return df
