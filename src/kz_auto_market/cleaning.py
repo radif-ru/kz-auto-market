@@ -133,12 +133,14 @@ DRIVE_CODES = {
 # у легковых и кроссоверов — передняя
 REAR_DRIVE_SEGMENTS = {'Коммерческие автомобили', 'Пикапы'}
 REAR_DRIVE_MODELS = {'TQ-1/H-1', 'T6'}
+# Шаблоны записаны латиницей: кириллические двойники заменяются до сравнения
+LOOKALIKES = str.maketrans('АВЕКМНОРСТХ', 'ABEKMHOPCTX')
 AUTOMATIC_PATTERN = re.compile(
-    r'AMT|CVT|DSG|DCT|TRONIC|PDK|POWERSHIFT|РЕДУКТОР|AKП|A/T|AT\b|^\d+\s*A$|^8$'
+    r'AMT|CVT|DSG|DCT|TRONIC|PDK|POWERSHIFT|AKП|A/T|AT\b|^\d+\s*A$|^8$'
 )
 MANUAL_PATTERN = re.compile(r'MT\b|M/T|MKП|MEX|^\d+\s*M$')
-# Кириллические буквы, которые в выгрузке подменяют латинские
-LOOKALIKES = str.maketrans('АТМЕХ', 'ATMEX')
+# У электромобиля одноступенчатый редуктор — это автоматическая трансмиссия
+REDUCTION_GEAR = 'РЕДУКТОР'
 MONTHS = {
     'Январь': 1,
     'Февраль': 2,
@@ -222,7 +224,10 @@ def unify_drive_value(drive: object) -> str | None:
 
 def simplify_transmission(transmission: object) -> str | None:
     """Две категории коробки передач: «Автомат» и «Механика»."""
-    value = str(transmission).strip().upper().translate(LOOKALIKES)
+    value = str(transmission).strip().upper()
+    if value == REDUCTION_GEAR:
+        return 'Автомат'
+    value = value.translate(LOOKALIKES)
     if AUTOMATIC_PATTERN.search(value):
         return 'Автомат'
     if MANUAL_PATTERN.search(value):
