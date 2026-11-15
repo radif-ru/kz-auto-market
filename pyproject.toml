@@ -32,6 +32,8 @@ select = ["E", "F", "I"]
 
 [tool.ruff.format]
 quote-style = "single"
+# JSON ноутбука пишет nbconvert, код ячеек проверяет ruff check
+exclude = ["*.ipynb"]
 
 [dependency-groups]
 dev = [
