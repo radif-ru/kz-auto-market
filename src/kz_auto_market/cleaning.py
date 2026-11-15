@@ -257,7 +257,8 @@ def unify_drives(df: pd.DataFrame) -> pd.DataFrame:
     rear = df['segment_2013'].isin(REAR_DRIVE_SEGMENTS) | df['model'].isin(
         REAR_DRIVE_MODELS
     )
-    drive = drive.mask((drive == '2WD') & rear, 'RWD').mask(drive == '2WD', 'FWD')
+    two_wheel = drive == '2WD'
+    drive = drive.mask(two_wheel & rear, 'RWD').mask(two_wheel & ~rear, 'FWD')
     return df.assign(drive=drive)
 
 
