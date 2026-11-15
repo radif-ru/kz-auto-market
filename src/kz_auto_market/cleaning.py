@@ -367,6 +367,8 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     df = unify_companies(df)
     df = fix_engine_volumes(df)
     df = normalize_case(df)
+    # после унификации часть строк стала полностью одинаковой
+    df = drop_empty_and_duplicates(df)
     return set_final_types(df)
 
 
