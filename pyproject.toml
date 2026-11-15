@@ -1,6 +1,6 @@
 [project]
 name = "kz-auto-market"
-version = "0.2.0"
+version = "1.0.0"
 description = "Очистка продаж новых автомобилей в Казахстане за 2019 год и анализ позиции автоцентра «Меркур Авто»"
 readme = "README.md"
 authors = [
